@@ -34,6 +34,11 @@ public interface ICustomTypeDescriptor
     TypeConverter? GetConverter();
 
     /// <summary>
+    /// Gets a type converter for this object.
+    /// </summary>
+    TypeConverter? GetConverterSafe();
+
+    /// <summary>
     /// Gets the default event for this object.
     /// </summary>
     [RequiresUnreferencedCode(EventDescriptor.RequiresUnreferencedCodeMessage)]

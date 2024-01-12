@@ -81,6 +81,16 @@ public abstract class CustomTypeDescriptor : ICustomTypeDescriptor
         return new TypeConverter();
     }
 
+    public virtual TypeConverter? GetConverterSafe()
+    {
+        if (_parent != null)
+        {
+            return _parent.GetConverterSafe();
+        }
+
+        return new TypeConverter();
+    }
+
     /// <summary>
     /// The GetDefaultEvent method returns the event descriptor for the default
     /// event on the object this type descriptor is representing.

@@ -769,6 +769,14 @@ public sealed class TypeDescriptor
     /// <summary>
     /// Gets a type converter for the specified type.
     /// </summary>
+    public static TypeConverter GetConverterSafe([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
+    {
+        return GetDescriptor(type, nameof(type)).GetConverterSafe();
+    }
+
+    /// <summary>
+    /// Gets a type converter for the specified type.
+    /// </summary>
     [RequiresUnreferencedCode(TypeConverter.RequiresUnreferencedCodeMessage)]
     public static TypeConverter GetConverter([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
     {
@@ -2608,6 +2616,8 @@ public sealed class TypeDescriptor
             [RequiresUnreferencedCode(TypeConverter.RequiresUnreferencedCodeMessage)]
             TypeConverter ICustomTypeDescriptor.GetConverter() => _handler.GetConverter(_instance);
 
+            TypeConverter ICustomTypeDescriptor.GetConverterSafe() => _handler.GetConverter(_instance);
+
             [RequiresUnreferencedCode(EventDescriptor.RequiresUnreferencedCodeMessage)]
             EventDescriptor ICustomTypeDescriptor.GetDefaultEvent()
             {
@@ -2903,6 +2913,17 @@ public sealed class TypeDescriptor
         TypeConverter ICustomTypeDescriptor.GetConverter()
         {
             TypeConverter? converter = _primary.GetConverter() ?? _secondary.GetConverter();
+
+            Debug.Assert(converter != null, "Someone should have handled this");
+            return converter;
+        }
+
+        /// <summary>
+        /// ICustomTypeDescriptor implementation.
+        /// </summary>
+        TypeConverter ICustomTypeDescriptor.GetConverterSafe()
+        {
+            TypeConverter? converter = _primary.GetConverterSafe() ?? _secondary.GetConverterSafe();
 
             Debug.Assert(converter != null, "Someone should have handled this");
             return converter;
@@ -3251,6 +3272,29 @@ public sealed class TypeDescriptor
             /// <summary>
             /// ICustomTypeDescriptor implementation.
             /// </summary>
+            [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode", Justification = "The ctor of this Type has RequiresUnreferencedCode.")]
+            TypeConverter ICustomTypeDescriptor.GetConverterSafe()
+            {
+                // Check to see if the provider we get is a ReflectTypeDescriptionProvider.
+                // If so, we can call on it directly rather than creating another
+                // custom type descriptor
+
+                TypeDescriptionProvider p = _node.Provider;
+                if (p is ReflectTypeDescriptionProvider rp)
+                {
+                    return rp.GetExtendedConverter(_instance);
+                }
+
+                ICustomTypeDescriptor desc = p.GetExtendedTypeDescriptor(_instance);
+                if (desc == null) throw new InvalidOperationException(SR.Format(SR.TypeDescriptorProviderError, _node.Provider.GetType().FullName, "GetExtendedTypeDescriptor"));
+                TypeConverter? converter = desc.GetConverter();
+                if (converter == null) throw new InvalidOperationException(SR.Format(SR.TypeDescriptorProviderError, _node.Provider.GetType().FullName, "GetConverter"));
+                return converter;
+            }
+
+            /// <summary>
+            /// ICustomTypeDescriptor implementation.
+            /// </summary>
             [RequiresUnreferencedCode(EventDescriptor.RequiresUnreferencedCodeMessage)]
             EventDescriptor? ICustomTypeDescriptor.GetDefaultEvent()
             {
@@ -3532,6 +3576,33 @@ public sealed class TypeDescriptor
             }
 
             return name;
+        }
+
+        /// <summary>
+        /// ICustomTypeDescriptor implementation.
+        /// </summary>
+        public TypeConverter GetConverterSafe()
+        {
+            // Check to see if the provider we get is a ReflectTypeDescriptionProvider.
+            // If so, we can call on it directly rather than creating another
+            // custom type descriptor
+            TypeDescriptionProvider p = _node.Provider;
+            TypeConverter? converter;
+            if (p is ReflectTypeDescriptionProvider rp)
+            {
+                converter = rp.GetConverter(_objectType);
+            }
+            else
+            {
+                ICustomTypeDescriptor? desc = p.GetTypeDescriptor(_objectType, _instance);
+                if (desc == null)
+                    throw new InvalidOperationException(SR.Format(SR.TypeDescriptorProviderError, _node.Provider.GetType().FullName, "GetTypeDescriptor"));
+                converter = desc.GetConverterSafe();
+                if (converter == null)
+                    throw new InvalidOperationException(SR.Format(SR.TypeDescriptorProviderError, _node.Provider.GetType().FullName, "GetConverter"));
+            }
+
+            return converter;
         }
 
         /// <summary>

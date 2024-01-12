@@ -154,7 +154,6 @@ internal sealed partial class ReflectTypeDescriptionProvider : TypeDescriptionPr
     /// </remarks>
     private static Dictionary<object, IntrinsicTypeConverterData> IntrinsicTypeConverters
     {
-        [RequiresUnreferencedCode("NullableConverter's UnderlyingType cannot be statically discovered.")]
         get
         {
             return LazyInitializer.EnsureInitialized(ref s_intrinsicTypeConverters, () => new Dictionary<object, IntrinsicTypeConverterData>(32)
@@ -374,6 +373,12 @@ internal sealed partial class ReflectTypeDescriptionProvider : TypeDescriptionPr
         return td.GetConverter(instance);
     }
 
+    internal TypeConverter GetConverter([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
+    {
+        ReflectedTypeData td = GetTypeData(type, true)!;
+        return td.GetConverter();
+    }
+
     /// <summary>
     /// Return the default event. The default event is determined by the
     /// presence of a DefaultEventAttribute on the class.
@@ -496,6 +501,16 @@ internal sealed partial class ReflectTypeDescriptionProvider : TypeDescriptionPr
     internal TypeConverter GetExtendedConverter(object instance)
     {
         return GetConverter(instance.GetType(), instance);
+    }
+
+    /// <summary>
+    /// Retrieves the type converter. If instance is non-null,
+    /// it will be used to retrieve attributes. Otherwise, _type
+    /// will be used.
+    /// </summary>
+    internal TypeConverter GetExtendedConverter([DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)] Type type)
+    {
+        return GetConverter(type);
     }
 
     /// <summary>
@@ -1449,7 +1464,7 @@ internal sealed partial class ReflectTypeDescriptionProvider : TypeDescriptionPr
     /// The strongly-typed dictionary maps object types to converter data objects which lazily
     /// creates (and caches for re-use, where applicable) converter instances.
     /// </summary>
-    [RequiresUnreferencedCode("NullableConverter's UnderlyingType cannot be statically discovered.")]
+    //[RequiresUnreferencedCode("NullableConverter's UnderlyingType cannot be statically discovered.")]
     private static TypeConverter GetIntrinsicTypeConverter(Type callingType)
     {
         TypeConverter converter;

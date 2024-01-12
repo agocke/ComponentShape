@@ -223,6 +223,30 @@ internal sealed partial class ReflectTypeDescriptionProvider : TypeDescriptionPr
             return _converter;
         }
 
+        internal TypeConverter GetConverter(TypeConverterAttribute? typeAttr = null)
+        {
+            typeAttr ??= (TypeConverterAttribute?)TypeDescriptor.GetAttributes(_type)[typeof(TypeConverterAttribute)];
+
+            if (typeAttr != null)
+            {
+                Type? converterType = GetTypeFromNameSafe(typeAttr.ConverterTypeName);
+                if (converterType != null && typeof(TypeConverter).IsAssignableFrom(converterType))
+                {
+                    _converter = (TypeConverter)CreateInstance(converterType, _type)!;
+                }
+            }
+
+            if (_converter == null)
+            {
+                // We did not get a converter. Traverse up the base class chain until
+                // we find one in the stock hashtable.
+                _converter = GetIntrinsicTypeConverter(_type);
+                Debug.Assert(_converter != null, "There is no intrinsic setup in the hashtable for the Object type");
+            }
+
+            return _converter;
+        }
+
         /// <summary>
         /// Return the default event. The default event is determined by the
         /// presence of a DefaultEventAttribute on the class.
@@ -490,6 +514,54 @@ internal sealed partial class ReflectTypeDescriptionProvider : TypeDescriptionPr
         [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2057:TypeGetType",
             Justification = "Using the non-assembly qualified type name will still work.")]
         private Type? GetTypeFromName(
+            // this method doesn't create the type, but all callers are annotated with PublicConstructors,
+            // so use that value to ensure the Type will be preserved
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] string typeName)
+        {
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return null;
+            }
+
+            int commaIndex = typeName.IndexOf(',');
+            Type? t = null;
+
+            if (commaIndex == -1)
+            {
+                t = _type.Assembly.GetType(typeName);
+            }
+
+            t ??= Type.GetType(typeName);
+
+            if (t == null && commaIndex != -1)
+            {
+                // At design time, it's possible for us to reuse
+                // an assembly but add new types. The app domain
+                // will cache the assembly based on identity, however,
+                // so it could be looking in the previous version
+                // of the assembly and not finding the type. We work
+                // around this by looking for the non-assembly qualified
+                // name, which causes the domain to raise a type
+                // resolve event.
+                t = Type.GetType(typeName.Substring(0, commaIndex));
+            }
+
+            return t;
+        }
+
+        /// <summary>
+        /// Retrieves a type from a name. The Assembly of the type
+        /// that this PropertyDescriptor came from is first checked,
+        /// then a global Type.GetType is performed.
+        /// </summary>
+        [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2026:RequiresUnreferencedCode",
+            Justification = "Calling _type.Assembly.GetType on a non-assembly qualified type will still work. See https://github.com/mono/linker/issues/1895")]
+        [UnconditionalSuppressMessage("ReflectionAnalysis", "IL2057:TypeGetType",
+            Justification = "Using the non-assembly qualified type name will still work.")]
+        [UnconditionalSuppressMessage("Reflection", "IL2073",
+            Justification = "DAM should be able to handle this case.")]
+        [return: DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
+        private Type? GetTypeFromNameSafe(
             // this method doesn't create the type, but all callers are annotated with PublicConstructors,
             // so use that value to ensure the Type will be preserved
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] string typeName)
